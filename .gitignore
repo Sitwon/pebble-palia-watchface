@@ -1,5 +1,5 @@
 build/
-screenshot_*.png
+*_screenshot.png
 icon_*.png
 pebble-logs.txt
 .pebble-logs.pid
