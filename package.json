@@ -1,7 +1,7 @@
 {
   "name": "pebble-palia-face",
-  "author": "MakeAwesomeHappen",
-  "version": "1.0.2",
+  "author": "Sitwon",
+  "version": "1.0.3",
   "keywords": ["pebble-app"],
   "private": true,
   "dependencies": {},
