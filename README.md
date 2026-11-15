@@ -1,35 +1,55 @@
 # pebble-palia-face
 
-A Pebble watchapp/watchface written in C using the Pebble SDK.
+A Pebble watchface that shows the in-game time of day for the game
+[Palia](https://palia.wiki.gg/wiki/Guide:Time_Passage_in_Palia) on a one-hand
+24-hour analog dial.
+
+## How it works
+
+Palia runs at 24x real speed: one in-game day passes in one real hour, so one
+in-game minute passes every 2.5 real seconds. Anchors (minutes past the real
+hour): 12:00 AM = :00, 6:00 AM = :15, 12:00 PM = :30, 6:00 PM = :45. The face
+computes Palia time entirely on-watch from the local clock — no phone or
+internet needed.
+
+The dial shows the Palia day/night cycle with colors matching the in-game
+clock as full-screen angular sectors (noon at top, midnight at bottom): Dawn
+3 AM–6 AM and Dusk 6 PM–9 PM as slices on the left/right edges, Day 6 AM–6 PM
+filling the top half including the top corners, and Night 9 PM–3 AM filling
+the bottom middle and bottom corners. Matching the in-game clock, a small
+white sun sits at the noon position and a crescent moon with a few stars at
+midnight. A single needle points at the current
+in-game time, and the real-world time is shown in the center badge, following
+the watch's 12/24-hour setting.
+
+Updates use a self-rescheduling 2.5s `app_timer` (one wake per in-game
+minute, redrawn only when something changed) instead of per-second ticks, to
+keep battery drain low.
 
 ## Building & running
 
 ```sh
-pebble build                          # build for all targetPlatforms
+pebble build                          # build the PBW
 pebble install --emulator emery       # install on the emery emulator
 pebble install --phone <ip>           # install to a paired phone
+pebble install --cloudpebble          # deploy via CloudPebble
 ```
 
 ## Target platforms
 
-`targetPlatforms` in `package.json` controls which watches you build for. The
-modern Pebble hardware is **emery** (Pebble Time 2), **gabbro** (Pebble Round
-2), and **flint** (Pebble 2 Duo); the original Pebble platforms (aplite,
-basalt, chalk, diorite) are included by default for backwards compatibility.
+`targetPlatforms` in `package.json` is currently set to `["emery"]` (Pebble
+Time 2). To support other watches, add platform names there — `gabbro` (Pebble
+Round 2), `flint` (Pebble 2 Duo), `basalt`, `chalk`, `aplite`, `diorite` — and
+rebuild.
 
 ## Project layout
 
 ```
-src/c/           C source for the watchapp
-src/pkjs/        PebbleKit JS (phone-side) source, if any
-worker_src/c/    Background worker source, if any
-resources/       Images, fonts, and other bundled resources
-package.json     Project metadata (UUID, platforms, resources, message keys)
+src/c/           C source for the watchface (src/c/main.c)
+resources/       Images, fonts, and other bundled resources (currently empty)
+package.json     Project metadata (UUID, platforms, resources)
 wscript          Build rules — usually no need to edit
 ```
-
-By default this project is configured as a watchapp. To make it a watchface,
-set `pebble.watchapp.watchface` to `true` in `package.json`.
 
 ## Documentation
 

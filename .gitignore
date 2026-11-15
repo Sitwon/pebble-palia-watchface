@@ -1,0 +1,5 @@
+build/
+screenshot_*.png
+icon_*.png
+pebble-logs.txt
+.pebble-logs.pid
