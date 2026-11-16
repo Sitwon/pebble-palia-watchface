@@ -4,6 +4,8 @@ A Pebble watchface that shows the in-game time of day for the game
 [Palia](https://palia.wiki.gg/wiki/Guide:Time_Passage_in_Palia) on a one-hand
 24-hour analog dial.
 
+> **Disclaimer:** This is an unofficial, fan-made watch face. It is not affiliated with, endorsed by, or sponsored by Tamalpa Studios or any of their partners. All game assets and trademarks belong to their respective owners.
+
 ## How it works
 
 Palia runs at 24x real speed: one in-game day passes in one real hour, so one
