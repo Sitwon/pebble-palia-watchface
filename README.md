@@ -32,17 +32,20 @@ keep battery drain low.
 
 ```sh
 pebble build                          # build the PBW
-pebble install --emulator emery       # install on the emery emulator
+pebble install --emulator basalt      # install on an emulator
+pebble install --emulator chalk       # (also: emery, gabbro)
 pebble install --phone <ip>           # install to a paired phone
 pebble install --cloudpebble          # deploy via CloudPebble
 ```
 
 ## Target platforms
 
-`targetPlatforms` in `package.json` is currently set to `["emery"]` (Pebble
-Time 2). To support other watches, add platform names there — `gabbro` (Pebble
-Round 2), `flint` (Pebble 2 Duo), `basalt`, `chalk`, `aplite`, `diorite` — and
-rebuild.
+`targetPlatforms` in `package.json` covers every Pebble with a color screen:
+`basalt` (Pebble Time), `chalk` (Pebble Time Round), `emery` (Pebble Time 2)
+and `gabbro` (Pebble Round 2). Layout scales off the screen bounds, round
+screens get circular dial ticks, and the black-and-white platforms (aplite,
+diorite, flint) are not supported — the color-coded day/night sectors would
+be unreadable on them.
 
 ## Project layout
 

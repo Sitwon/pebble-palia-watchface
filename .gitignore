@@ -3,3 +3,4 @@ build/
 icon_*.png
 pebble-logs.txt
 .pebble-logs.pid
+screenshots/

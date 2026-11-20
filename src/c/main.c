@@ -21,18 +21,22 @@
 // CONFIGURATION
 // ============================================================================
 
-// Dial geometry (emery is 200x228; all layout derives from layer bounds).
+// Dial geometry. Reference values are tuned for emery (200x228, so the
+// shorter screen half-extent is 100 px) and are scaled to the actual screen
+// in compute_geometry() so every platform keeps the same look.
 // The day/night cycle fills the entire screen as angular sectors clipped to
 // the rectangle ("square pie"): hour ticks sit on the screen perimeter and
 // the hand sweeps inside them.
-#define BADGE_RADIUS 28    // center badge holding the real-world time
+#define BADGE_RADIUS 28    // center badge radius (minimum; grows on bigger screens)
 #define HAND_LENGTH 98     // needle tip radius
 #define HAND_BASE_WIDTH 6  // needle half-width at its base
 #define HAND_BASE_Y 14     // hand base distance behind the pivot
 
 // Sun & moon decorations, matching the in-game clock (sun at the noon
 // position, moon at midnight, stars in the Night sector)
-#define ICON_POS_RADIUS 66   // distance of the sun/moon from the dial center
+#define ICON_POS_RADIUS 66        // distance of the sun/moon from the dial center
+#define ICON_POS_RADIUS_ROUND 56  // tighter on round screens: clears the tick ring
+                                  // above AND the badge ring below (chalk: pos 50)
 #define SUN_CORE_RADIUS 8
 #define SUN_RAY_INNER (SUN_CORE_RADIUS + 3)  // rays start here
 #define SUN_RAY_OUTER (SUN_CORE_RADIUS + 8)  // rays end here
@@ -74,6 +78,13 @@ static GPoint s_center;
 static int s_half_w;
 static int s_half_h;
 static GRect s_cover;  // enlarged rect whose circle covers the screen corners
+
+// Reference proportions (tuned at s_min_half == 100) scaled to this screen
+static int s_min_half;
+static int s_hand_length;
+static int s_icon_pos_r;
+static int s_badge_r;
+#define BADGE_U(v) ((v) * s_badge_r / BADGE_RADIUS)  // badge-internal offsets
 
 // Real-world time shown in the center badge
 static char s_real_time_buf[6];  // "12:34"
@@ -157,6 +168,16 @@ static void compute_geometry(void) {
   int half_diag = isqrt(s_half_w * s_half_w + s_half_h * s_half_h) + 1;
   s_cover = GRect(s_center.x - half_diag, s_center.y - half_diag,
                   2 * half_diag, 2 * half_diag);
+
+  // Scale the emery-tuned reference proportions to the actual screen
+  s_min_half = s_half_w < s_half_h ? s_half_w : s_half_h;
+  s_hand_length = HAND_LENGTH * s_min_half / 100;
+  s_icon_pos_r = PBL_IF_ROUND_ELSE(ICON_POS_RADIUS_ROUND, ICON_POS_RADIUS) *
+                 s_min_half / 100;
+  s_badge_r = BADGE_RADIUS * s_min_half / 100;
+  if (s_badge_r < BADGE_RADIUS) {
+    s_badge_r = BADGE_RADIUS;  // keep the digital time readable on small screens
+  }
 }
 
 static void draw_cycle(GContext *ctx) {
@@ -205,7 +226,7 @@ static void draw_ticks(GContext *ctx) {
 
   for (int h = 0; h < 24; h++) {
     bool bold = (h % 6) == 0;
-    int tick_len = bold ? 16 : 10;
+    int tick_len = (bold ? 16 : 10) * s_min_half / 100;
 
     int32_t angle = (TRIG_MAX_ANGLE / 2 + h * hour_step) % TRIG_MAX_ANGLE;
     int32_t sinv = sin_lookup(angle);
@@ -213,11 +234,18 @@ static void draw_ticks(GContext *ctx) {
     int32_t ax = sinv < 0 ? -sinv : sinv;
     int32_t ay = cosv < 0 ? -cosv : cosv;
 
+    GPoint outer;
+#if PBL_ROUND
+    // Round screens (chalk, gabbro): the perimeter is a circle, so ticks sit
+    // on a ring just inside the screen edge instead of the bounding square.
+    const int ring_r = s_min_half - 2;
+    outer.x = s_center.x + (sinv * ring_r) / TRIG_MAX_RATIO;
+    outer.y = s_center.y - (cosv * ring_r) / TRIG_MAX_RATIO;
+#else
     // Point where the ray from the center exits the rectangle. Pick the edge
     // the ray reaches FIRST by comparing time-to-edge along each axis
     // (half_w/|sin| vs half_h/|cos|, cross-multiplied to stay in integers —
     // the half-extents differ on non-square screens like emery).
-    GPoint outer;
     if (s_half_w * ay <= s_half_h * ax) {
       // Exits through the left or right edge
       outer.x = s_center.x + (sinv >= 0 ? s_half_w : -s_half_w);
@@ -238,6 +266,7 @@ static void draw_ticks(GContext *ctx) {
     } else if (outer.y > s_bounds.size.h - 1) {
       outer.y = s_bounds.size.h - 1;
     }
+#endif
 
     // Step back toward the center along the same ray
     GPoint inner = {
@@ -253,7 +282,7 @@ static void draw_ticks(GContext *ctx) {
 
 static void draw_sun(GContext *ctx) {
   // White sun with rays at the noon (top) position, like the in-game clock
-  GPoint pos = GPoint(s_center.x, s_center.y - ICON_POS_RADIUS);
+  GPoint pos = GPoint(s_center.x, s_center.y - s_icon_pos_r);
 
   graphics_context_set_fill_color(ctx, COLOR_RIM);
   graphics_fill_circle(ctx, pos, SUN_CORE_RADIUS);
@@ -277,7 +306,7 @@ static void draw_sun(GContext *ctx) {
 static void draw_moon(GContext *ctx) {
   // White crescent moon at the midnight (bottom) position: a full disc with
   // an offset disc of the night-sky color cutting the crescent
-  GPoint pos = GPoint(s_center.x, s_center.y + ICON_POS_RADIUS);
+  GPoint pos = GPoint(s_center.x, s_center.y + s_icon_pos_r);
 
   graphics_context_set_fill_color(ctx, COLOR_RIM);
   graphics_fill_circle(ctx, pos, MOON_RADIUS);
@@ -288,8 +317,8 @@ static void draw_moon(GContext *ctx) {
 }
 
 static void draw_stars(GContext *ctx) {
-  // A few small stars scattered in the Night sector. Offsets are absolute
-  // pixels tuned for the emery screen (the only supported target).
+  // A few small stars scattered in the Night sector. Offsets are reference
+  // pixels for emery (s_min_half == 100) and scale with the screen.
   static const GPoint star_offsets[] = {
       {-38, 62}, {30, 75}, {-18, 92},
   };
@@ -299,8 +328,9 @@ static void draw_stars(GContext *ctx) {
   for (size_t i = 0; i < ARRAY_LENGTH(star_offsets); i++) {
     graphics_fill_circle(
         ctx,
-        GPoint(s_center.x + star_offsets[i].x, s_center.y + star_offsets[i].y),
-        star_radii[i]);
+        GPoint(s_center.x + star_offsets[i].x * s_min_half / 100,
+               s_center.y + star_offsets[i].y * s_min_half / 100),
+        (star_radii[i] * s_min_half + 50) / 100);
   }
 }
 
@@ -326,31 +356,34 @@ static void draw_hand(GContext *ctx) {
 
 static void draw_center_badge(GContext *ctx) {
   graphics_context_set_fill_color(ctx, COLOR_BADGE);
-  graphics_fill_circle(ctx, s_center, BADGE_RADIUS);
+  graphics_fill_circle(ctx, s_center, s_badge_r);
 
   graphics_context_set_stroke_color(ctx, COLOR_RIM);
   graphics_context_set_stroke_width(ctx, 2);
-  graphics_draw_circle(ctx, s_center, BADGE_RADIUS);
+  graphics_draw_circle(ctx, s_center, s_badge_r);
 
   // Real-world digital time, centered. In 12-hour mode the AM/PM suffix is
   // drawn underneath at a smaller size, so the time sits slightly high; in
   // 24-hour mode there is no suffix line, so use a larger font that fills
-  // the badge better.
+  // the badge better. Rects scale with the badge radius.
   graphics_context_set_text_color(ctx, COLOR_RIM);
   GFont time_font;
   GRect time_rect;
   if (s_ampm_buf[0] != '\0') {
     time_font = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
-    time_rect = GRect(s_center.x - 34, s_center.y - 16, 68, 22);
+    time_rect = GRect(s_center.x - BADGE_U(34), s_center.y - BADGE_U(16),
+                      BADGE_U(68), BADGE_U(22));
   } else {
     time_font = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
-    time_rect = GRect(s_center.x - 40, s_center.y - 17, 80, 26);
+    time_rect = GRect(s_center.x - BADGE_U(40), s_center.y - BADGE_U(17),
+                      BADGE_U(80), BADGE_U(26));
   }
   graphics_draw_text(ctx, s_real_time_buf, time_font, time_rect,
                      GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
 
   if (s_ampm_buf[0] != '\0') {
-    GRect ampm_rect = GRect(s_center.x - 34, s_center.y + 6, 68, 16);
+    GRect ampm_rect = GRect(s_center.x - BADGE_U(34), s_center.y + BADGE_U(6),
+                            BADGE_U(68), BADGE_U(16));
     graphics_draw_text(ctx, s_ampm_buf,
                        fonts_get_system_font(FONT_KEY_GOTHIC_14),
                        ampm_rect, GTextOverflowModeWordWrap,
@@ -429,7 +462,7 @@ static void window_load(Window *window) {
 
   // Needle shape: long thin triangle pointing up, rotated per update. The
   // wide base sits under the center badge.
-  s_hand_points[0] = GPoint(0, -HAND_LENGTH);        // tip
+  s_hand_points[0] = GPoint(0, -s_hand_length);        // tip
   s_hand_points[1] = GPoint(HAND_BASE_WIDTH, HAND_BASE_Y);   // right base
   s_hand_points[2] = GPoint(-HAND_BASE_WIDTH, HAND_BASE_Y);  // left base
   s_hand_path = gpath_create(&s_hand_info);
